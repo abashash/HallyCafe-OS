@@ -1,0 +1,12 @@
+DROP POLICY IF EXISTS "sup read" ON public.suppliers;
+DROP POLICY IF EXISTS "sup write" ON public.suppliers;
+DROP POLICY IF EXISTS "sup update" ON public.suppliers;
+CREATE POLICY "sup read" ON public.suppliers FOR SELECT TO authenticated USING (public.has_role(auth.uid(),'admin'));
+CREATE POLICY "sup write" ON public.suppliers FOR INSERT TO authenticated WITH CHECK (public.has_role(auth.uid(),'admin'));
+CREATE POLICY "sup update" ON public.suppliers FOR UPDATE TO authenticated USING (public.has_role(auth.uid(),'admin')) WITH CHECK (public.has_role(auth.uid(),'admin'));
+DROP POLICY IF EXISTS "set read" ON public.app_settings;
+DROP POLICY IF EXISTS "set write" ON public.app_settings;
+DROP POLICY IF EXISTS "set update" ON public.app_settings;
+CREATE POLICY "set read" ON public.app_settings FOR SELECT TO authenticated USING (public.has_role(auth.uid(),'admin'));
+CREATE POLICY "set write" ON public.app_settings FOR INSERT TO authenticated WITH CHECK (public.has_role(auth.uid(),'admin'));
+CREATE POLICY "set update" ON public.app_settings FOR UPDATE TO authenticated USING (public.has_role(auth.uid(),'admin')) WITH CHECK (public.has_role(auth.uid(),'admin'));

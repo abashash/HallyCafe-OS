@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.apply_invoice_item() FROM public, anon, authenticated;

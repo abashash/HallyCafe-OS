@@ -1,0 +1,56 @@
+/**
+ * Hally Cafe Plugin - Frontend Stylesheet
+ */
+
+.hally-cafe-wrapper {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  background: transparent;
+}
+
+.hally-cafe-iframe {
+  width: 100% !important;
+  min-width: 100% !important;
+  border: none !important;
+  display: block;
+  background: transparent;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+}
+
+.hally-cafe-loading-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #64748b;
+  font-family: inherit;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.hally-spinner-dot {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(59, 130, 246, 0.2);
+  border-radius: 50%;
+  border-top-color: #3b82f6;
+  animation: hally-spin 0.8s linear infinite;
+  margin-bottom: 8px;
+}
+
+@keyframes hally-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hally-pos-container iframe,
+.hally-kitchen-container iframe {
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+}

@@ -1,0 +1,12 @@
+DROP POLICY IF EXISTS "inv read" ON public.invoices;
+DROP POLICY IF EXISTS "inv write" ON public.invoices;
+CREATE POLICY "inv read" ON public.invoices FOR SELECT TO authenticated USING (auth.uid() IS NOT NULL);
+CREATE POLICY "inv write" ON public.invoices FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "exp read" ON public.operating_expenses;
+DROP POLICY IF EXISTS "exp write" ON public.operating_expenses;
+CREATE POLICY "exp read" ON public.operating_expenses FOR SELECT TO authenticated USING (auth.uid() IS NOT NULL);
+CREATE POLICY "exp write" ON public.operating_expenses FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "ing read" ON public.ingredients;
+DROP POLICY IF EXISTS "ing write" ON public.ingredients;
+CREATE POLICY "ing read" ON public.ingredients FOR SELECT TO authenticated USING (auth.uid() IS NOT NULL);
+CREATE POLICY "ing write" ON public.ingredients FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL);
