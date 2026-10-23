@@ -1,14 +1,14 @@
 <?php
 /**
- * Plugin Name: Hally Cafe & Restaurant OS | افزونه مدیریت و منوی آنلاین کافه هالی
- * Plugin URI:  https://github.com/abashash/cafe-khalagh-cost
+ * Plugin Name: HallyCafe OS | افزونه مدیریت و منوی آنلاین کافه هالی
+ * Plugin URI:  https://github.com/abashash/HallyCafe-OS
  * Description: سیستم کاملاً مستقل، بومی و جامع مدیریت کافه و رستوران در وردپرس (بدون نیاز به سرور یا آی‌فریم خارجی)؛ شامل دیتابیس بومی در وردپرس، منوی دیجیتال آنلاین، صندوق فروشگاهی (POS)، تابلوی زنده آشپزخانه (KDS)، رزرواسیون میز، انبارداری و مدیریت هزینه‌ها.
  * Version:     2.0.0
  * Author:      Fars.Company
  * Author URI:  https://fars.company
  * License:     GPL-2.0+
  * License URI: http://www.gnu.org/licenses/gpl-2.0.txt
- * Text Domain: hally-cafe
+ * Text Domain: HallyCafe-OS
  * Domain Path: /languages
  */
 
