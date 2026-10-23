@@ -1,0 +1,39 @@
+name: Release Hally Cafe WordPress Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-plugin:
+    name: Package & Attach WordPress Plugin to GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Package WordPress Plugin
+        run: |
+          mkdir -p release-artifacts
+          cd wordpress-plugin
+          zip -r ../release-artifacts/hally-cafe.zip . -x "hally-cafe.zip"
+          cd ..
+          echo "Package created at release-artifacts/hally-cafe.zip"
+          ls -lh release-artifacts/hally-cafe.zip
+
+      - name: Upload Plugin to Release Assets
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        with:
+          files: release-artifacts/hally-cafe.zip
+          name: Hally Cafe WordPress Plugin ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
