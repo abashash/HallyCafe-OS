@@ -3,12 +3,12 @@ import urllib.error
 import json
 import os
 
-TOKEN = "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"
+TOKEN = os.environ.get("GITHUB_TOKEN", "")
 REPO = "abashash/HallyCafe-OS"
 RELEASE_ID = 421877235
 
 headers = {
-    "Authorization": f"token {TOKEN}",
+    "Authorization": f"token {TOKEN}" if TOKEN else "",
     "Accept": "application/vnd.github.v3+json",
     "User-Agent": "Fars-Company-Deployer"
 }

@@ -570,39 +570,47 @@ export function WordPressPluginExport() {
               </span>
               <CardTitle className="text-xl">
                 {t(
-                  "مرکز تبدیل و اتصال به افزونه وردپرس (WordPress Plugin)",
-                  "WordPress Plugin Integration & Export",
-                  "مركز التحويل والربط بإضافة ووردبريس",
+                  "مرکز افزونه وردپرس HallyCafe OS (نسخه بومی و مستقل ۲.۰.۰)",
+                  "HallyCafe OS WordPress Plugin (Native v2.0.0)",
+                  "إضافة ووردبريس HallyCafe OS (الإصدار الأصلي 2.0.0)",
                 )}
               </CardTitle>
-              <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
-                {t("نسخه ۱.۰.۰ استاندارد", "v1.0.0 Standard", "الإصدار 1.0.0")}
+              <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 font-bold">
+                {t("نسخه ۲.۰.۰ بومی Fars.Company", "v2.0.0 Native Fars.Company", "الإصدار 2.0.0")}
               </Badge>
             </div>
             <CardDescription className="text-sm leading-6">
               {t(
-                "این سامانه کافه به گونه‌ای مهندسی شده که می‌توانید آن را با یک کلیک به عنوان یک افزونه استاندارد وردپرس (ZIP) دریافت کرده و روی هر سایت وردپرسی با المنتور یا برگه‌ها نصب کنید.",
-                "Export this complete Cafe OS as a ready-to-install WordPress plugin (.zip) and embed online menus, POS, reservations, and customer loyalty into your WordPress site.",
-                "تصدير هذا النظام كإضافة ووردبريس جاهزة للتثبيت ودمج القائمة والصندوق وحجز الطاولات في موقعك.",
+                "افزونه ۱۰۰٪ بومی و مستقل بدون نیاز به آی‌فریم و سرور خارجی؛ با جداول اختصاصی پایگاه داده وردپرس، سیستم صندوق، تابلوی زنده آشپزخانه و منوی اختصاصی.",
+                "100% native standalone WordPress plugin with internal database tables, POS, live kitchen display, and digital menu.",
+                "إضافة ووردبريس أصلية ومستقلة 100% مع قواعد بيانات داخلية ونظام كاشير ومطبخ وقائمة إلكترونية.",
               )}
             </CardDescription>
           </div>
 
-          <Button
-            size="lg"
-            className="gap-2 bg-emerald-600 hover:bg-emerald-700 font-bold shadow-md text-white"
-            onClick={handleDownloadZip}
-            disabled={isExporting}
-          >
-            <Download className="size-5" />
-            {isExporting
-              ? t("در حال ساخت زیپ...", "Generating ZIP...", "جارٍ الإنشاء...")
-              : t(
-                  "دانلود فایل ZIP افزونه وردپرس",
-                  "Download WP Plugin .ZIP",
-                  "تنزيل إضافة ووردبريس ZIP",
-                )}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="/HallyCafe-OS.zip"
+              download="HallyCafe-OS.zip"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 hover:bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white shadow-md transition-colors"
+            >
+              <Download className="size-4" />
+              {t(
+                "دانلود مستقیم HallyCafe-OS.zip",
+                "Download HallyCafe-OS.zip",
+                "تنزيل HallyCafe-OS.zip",
+              )}
+            </a>
+            <a
+              href="https://github.com/abashash/HallyCafe-OS/releases/tag/v2.0.0"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background hover:bg-accent px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm transition-colors"
+            >
+              <ExternalLink className="size-4" />
+              {t("انتشار رسمی در گیت‌هاب", "GitHub Release v2.0.0", "إصدار جيت هاب v2.0.0")}
+            </a>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="rounded-xl border border-border/80 bg-background/80 p-4">

@@ -19,21 +19,19 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Package WordPress Plugin
+      - name: Package WordPress Plugins
         run: |
-          mkdir -p release-artifacts
-          cd wordpress-plugin
-          zip -r ../release-artifacts/hally-cafe.zip . -x "hally-cafe.zip"
-          cd ..
-          echo "Package created at release-artifacts/hally-cafe.zip"
-          ls -lh release-artifacts/hally-cafe.zip
+          python3 scripts/package-plugin.py
+          ls -lh public/*.zip
 
       - name: Upload Plugin to Release Assets
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
         with:
-          files: release-artifacts/hally-cafe.zip
-          name: Hally Cafe WordPress Plugin ${{ github.ref_name }}
+          files: |
+            public/HallyCafe-OS.zip
+            public/hally-cafe.zip
+          name: HallyCafe OS WordPress Plugin ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
