@@ -81,7 +81,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "HallyCafe OS: سیستم جامع مدیریت کافه و افزونه بومی وردپرس؛ صندوق، سفارش آنلاین، تابلوی آشپزخانه، انبار، باشگاه مشتریان، رسپی و بهای تمام‌شده.",
+          "HallyCafe OS: سیستم جامع مدیریت کافه؛ صندوق، سفارش آنلاین، تابلوی آشپزخانه، انبار، باشگاه مشتریان، رسپی و بهای تمام‌شده.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

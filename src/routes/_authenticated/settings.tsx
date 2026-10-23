@@ -15,7 +15,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/PageHeader";
-import { WordPressPluginExport } from "@/components/WordPressPluginExport";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -342,19 +341,6 @@ function SettingsPage() {
             )}
             <Badge variant="secondary" className="ms-1 text-[11px]">
               {enabledCount}/{FEATURE_DEFINITIONS.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger
-            value="wordpress"
-            className="gap-1.5 font-bold border-primary/30 text-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
-            <Plug className="size-4" />
-            {t("افزونه وردپرس (WordPress)", "WordPress Plugin", "إضافة ووردبريس")}
-            <Badge
-              variant="outline"
-              className="ms-1 border-primary/40 bg-primary/10 text-[10px] text-primary data-[state=active]:bg-white data-[state=active]:text-primary"
-            >
-              ZIP
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="operational" className="gap-1.5">
@@ -1288,10 +1274,6 @@ function SettingsPage() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="wordpress" className="space-y-6">
-          <WordPressPluginExport />
         </TabsContent>
       </Tabs>
     </>

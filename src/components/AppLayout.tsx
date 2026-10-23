@@ -328,20 +328,6 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
           </span>
         </a>
       )}
-
-      <a
-        href="/settings?tab=wordpress"
-        onClick={onNavigate}
-        className="mt-1 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors"
-      >
-        <span className="flex items-center gap-2">
-          <Plug className="size-4 shrink-0" />
-          <span className="truncate">
-            {t("افزونه وردپرس", "WordPress Plugin", "إضافة ووردبريس")}
-          </span>
-        </span>
-        <span className="rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-mono">ZIP</span>
-      </a>
     </nav>
   );
 }
