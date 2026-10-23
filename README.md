@@ -1,24 +1,83 @@
-# Cafe Cost Master
+# سامانه جامع مدیریت کافه و رستوران هالی (Hally Cafe & Restaurant OS)
 
-Create a full-stack cafe cost control web application in Persian with RTL support. Features: authentication with admin/staff roles, category management, menu items, recipes with metric units (g, ml, kg, L), raw materials with purchase prices in thousand Tomans, supplier management, daily invoice entry that automatically updates weighted average cost of ingredients, ingredient price history, alerts for significant price increases, recipe costing, menu item cost calculation, food cost %, selling price, gross profit, dashboards, inventory, waste tracking, low stock alerts, reports, CSV/Excel import/export, audit log, responsive UI with Tailwind and shadcn/ui, PostgreSQL backend.
+یک سیستم تمام‌عیار، مدرن و یکپارچه برای مدیریت کافه‌ها و رستوران‌ها، طراحی شده با TypeScript، React، Tailwind CSS و معماری فول‌استک. این پلتفرم علاوه بر وب‌اپلیکیشن مستقل، دارای افزونه اختصاصی وردپرس جهت اتصال مستقیم به وب‌سایت‌های وردپرسی و فروشگاه‌ها می‌باشد.
 
-This project was built with [Lovable](https://lovable.dev).
+---
 
-## Build with Lovable
+## 🌟 قابلیت‌های کلیدی سامانه
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/449bd03f-eece-4fe0-8ae8-19db67e04d95).
+### ۱. منوی آنلاین و سفارش‌گیر دیجیتال (Online Menu)
+- دسته‌بندی هوشمند با فیلتر سریع و انیمیشن‌های روان
+- قابلیت اسکن بارکد QR اختصاصی روی هر میز
+- نمایش مشخصات کامل، قیمت‌ها، تصاویر و نشانگرهای ویژه (آیتم‌های محبوب، فصلی و...)
+- ثبت سفارش آنلاین با پشتیبانی از چند زبان و راست‌چین کامل (RTL)
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+### ۲. صندوق فروشگاهی و تبلت سفارش‌گیر سالن (POS)
+- رابط کاربری سریع و لمسی برای ویترس‌ها و صندوقدار
+- اتصال مستقیم سفارش به میز، شماره فاکتور و وضعیت پرداخت
+- امکان تخفیف، ثبت یادداشت سفارش و محاسبه مالیات بر ارزش افزوده
 
-## Development
+### ۳. تابلوی هوشمند آشپزخانه و بار گرم (KDS)
+- مانیتورینگ لحظه‌ای و بلادرنگ سفارشات ثبت‌شده
+- تفکیک مراحل سفارش (در حال آماده‌سازی، آماده تحویل، تحویل داده شده)
+- هشدار صوتی و تصویری برای سفارش‌های جدید
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+### ۴. رزرواسیون آنلاین میز (Table Reservations)
+- تقویم جلالی شمسی و انتخاب بازه زمانی
+- انتخاب میز دلخواه بر اساس چیدمان سالن
+- ارسال پیامک تایید و مدیریت ظرفیت میزها
 
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+### ۵. باشگاه مشتریان و ورود امن پیامکی
+- ورود تفکیک‌شده پرسنل و مهمانان از طریق شماره موبایل و کد یکبار مصرف (OTP)
+- سیستم امتیازدهی و وفاداری به ازای هر خرید
+- کدهای تخفیف، ووچر و پیگیری سوابق سفارشات
+
+### ۶. مدیریت انبار، هزینه‌ها و بهای تمام‌شده رسپی‌ها (Cost Control)
+- ثبت فاکتورهای خرید روزانه و تامین‌کنندگان
+- محاسبه دقیق میانگین موزون قیمت مواد اولیه
+- بهای تمام‌شده هر قلم منو (Food Cost %) و محاسبه سود ناخالص
+- ثبت هزینه‌های جاری (اجاره، پرسنل، قبوض و...) با قابلیت ویرایش کامل
+
+---
+
+## 🔌 افزونه اختصاصی وردپرس (WordPress Plugin)
+
+پوشه `wordpress-plugin/` و فایل `hally-cafe.zip` حاوی افزونه رسمی وردپرس است که امکان ادغام کامل سامانه با هر سایت وردپرسی و سازنده‌هایی مانند المنتور (Elementor) را فراهم می‌آورد.
+
+### نحوه نصب در وردپرس:
+1. فایل `wordpress-plugin/hally-cafe.zip` (یا از مسیر `/hally-cafe.zip`) را دانلود کنید.
+2. در پیشخوان وردپرس به مسیر **افزونه‌ها > افزودن افزونه > بارگذاری افزونه** بروید.
+3. فایل ZIP را آپلود و فعال کنید.
+4. در منوی جدید **کافه هالی > تنظیمات**، آدرس وب‌اپلیکیشن خود را وارد نمایید.
+
+### شورت‌کدهای آماده:
+| شورت‌کد | عملکرد |
+|---|---|
+| `[hally_menu]` | نمایش منوی دیجیتال آنلاین برای مشتریان |
+| `[hally_reserve]` | فرم رزرواسیون میز کافه |
+| `[hally_account]` | باشگاه مشتریان و سوابق سفارش |
+| `[hally_pos]` | صفحه صندوق فروشگاهی سالن |
+| `[hally_kitchen]` | تابلوی KDS سفارشات آشپزخانه |
+| `[hally_admin]` | پیشخوان جامع مدیریت |
+
+---
+
+## 🛠️ راه‌اندازی و توسعه محلی (Development)
+
+برای اجرای پروژه روی سیستم شخصی:
+
+```bash
+# نصب پکیج‌ها
+npm install
+
+# اجرای سرور توسعه محلی
 npm run dev
+
+# ساخت بیلد نهایی
+npm run build
 ```
+
+---
+
+## 📄 لایسنس
+توسعه داده شده توسط تیم توسعه کافه هالی. کلیه حقوق محفوظ است.

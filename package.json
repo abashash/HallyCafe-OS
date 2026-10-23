@@ -1,6 +1,7 @@
 {
-  "name": "tanstack_start_ts",
-  "private": true,
+  "name": "hally-cafe-os",
+  "version": "1.0.0",
+  "description": "سامانه جامع مدیریت کافه هالی و افزونه اختصاصی وردپرس",
   "sideEffects": false,
   "type": "module",
   "scripts": {
