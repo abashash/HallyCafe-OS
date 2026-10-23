@@ -2,6 +2,7 @@
   "name": "hally-cafe-os",
   "version": "1.0.0",
   "description": "سامانه جامع مدیریت کافه هالی و افزونه اختصاصی وردپرس",
+  "author": "Fars.Company",
   "sideEffects": false,
   "type": "module",
   "scripts": {

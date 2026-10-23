@@ -71,15 +71,12 @@ export const extractInvoice = createServerFn({ method: "POST" })
     const apiKey =
       process.env["AI_API_KEY"] ||
       process.env["OPENAI_API_KEY"] ||
-      process.env["GEMINI_API_KEY"] ||
-      process.env["LOVABLE_API_KEY"];
+      process.env["GEMINI_API_KEY"];
     if (!apiKey) throw new Error("سرویس هوش مصنوعی تنظیم نشده است");
 
     const endpoint =
       process.env["AI_GATEWAY_URL"] ||
-      (process.env["LOVABLE_API_KEY"]
-        ? "https://ai.gateway.lovable.dev/v1/chat/completions"
-        : "https://api.openai.com/v1/chat/completions");
+      "https://api.openai.com/v1/chat/completions";
 
     const res = await fetch(endpoint, {
       method: "POST",

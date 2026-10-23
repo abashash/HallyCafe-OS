@@ -4,8 +4,8 @@
  * Plugin URI:  https://github.com/hally-cafe
  * Description: افزونه جامع اتصال سیستم مدیریت کافه هالی به وردپرس؛ شامل منوی دیجیتال آنلاین، رزرواسیون میز، صندوق فروشگاهی (POS)، تابلوی آشپزخانه (KDS) و باشگاه مشتریان با شورت‌کدهای اختصاصی، پیشخوان مدیریت و سازگاری کامل با المنتور.
  * Version:     1.0.0
- * Author:      Hally OS Team
- * Author URI:  https://hally.ir
+ * Author:      Fars.Company
+ * Author URI:  https://fars.company
  * License:     GPL-2.0+
  * License URI: http://www.gnu.org/licenses/gpl-2.0.txt
  * Text Domain: hally-cafe

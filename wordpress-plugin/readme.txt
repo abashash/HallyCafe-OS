@@ -1,5 +1,5 @@
 === Hally Cafe & Restaurant OS ===
-Contributors: hallycafe
+Contributors: FarsCompany
 Tags: cafe, restaurant, menu, pos, food menu, reservation, kitchen display, ordering, digital menu, cafe pos
 Requires at least: 5.8
 Tested up to: 6.7
