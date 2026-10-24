@@ -911,7 +911,9 @@ function OnlineMenuPage() {
         open={loyaltyOpen}
         onOpenChange={setLoyaltyOpen}
         defaultProvider={publicHally?.config.sms_provider ?? "mediana"}
-        currencySymbol={publicHally?.config.currency_symbol}
+        {...(publicHally?.config.currency_symbol
+          ? { currencySymbol: publicHally.config.currency_symbol }
+          : {})}
         onCustomerAuthenticated={(portal) => {
           setCustomerPortal(portal);
           if (portal) {

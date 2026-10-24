@@ -1,8 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
+import { randomInt } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 
+import { requireHallyAuth } from "@/integrations/supabase/auth-middleware.server";
+import {
+  createStaffSessionToken,
+  getStaffCredentialFingerprint,
+  hashStaffPin,
+  isStaffPinHash,
+  performDummyStaffPinVerification,
+  verifyStaffPin,
+} from "@/integrations/supabase/staff-session.server";
 import {
   DEFAULT_HALLY_CONFIG,
   normalizeHallyConfig,
@@ -22,6 +32,7 @@ import {
   type HallyStoreData,
   type InventoryBatch,
   type InventoryMovement,
+  type JsonValue,
   type LoyaltyLedgerEntry,
   type LoyaltyReward,
   type LoyaltyTier,
@@ -36,6 +47,7 @@ import {
   type PrintJob,
   type RewardRedemption,
   type StaffAuditEntry,
+  type StaffLoginResult,
   type StaffPermissions,
   type StaffRole,
   type StaffUser,
@@ -48,6 +60,8 @@ type PersistedBundle = {
 };
 
 const STORE_FILE = resolve(tmpdir(), "hally-os-store.json");
+const STAFF_LOGIN_MAX_ATTEMPTS = 5;
+const STAFF_LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
 function createInitialBundle(): PersistedBundle {
   const now = new Date().toISOString();
@@ -477,71 +491,7 @@ function createInitialBundle(): PersistedBundle {
     },
   ];
 
-  const staff_users: StaffUser[] = [
-    {
-      id: "stf-admin",
-      name: "مدیر کل هالی",
-      username: "admin",
-      pin: "1234",
-      phone: "09120000001",
-      role: "admin",
-      permissions: { ...DEFAULT_ROLE_PERMISSIONS.admin },
-      is_active: true,
-      created_at: now,
-    },
-    {
-      id: "stf-waiter-1",
-      name: "علی رضایی (ویترس سالن)",
-      username: "waiter1",
-      pin: "1111",
-      phone: "09120000002",
-      role: "waiter",
-      permissions: {
-        ...DEFAULT_ROLE_PERMISSIONS.waiter,
-        canEditOrder: true,
-        canDeleteOrder: true,
-      },
-      is_active: true,
-      created_at: now,
-    },
-    {
-      id: "stf-waiter-2",
-      name: "مریم کاظمی (ویترس تراس)",
-      username: "waiter2",
-      pin: "2222",
-      phone: "09120000003",
-      role: "waiter",
-      permissions: {
-        ...DEFAULT_ROLE_PERMISSIONS.waiter,
-        canEditOrder: false,
-        canDeleteOrder: false,
-      },
-      is_active: true,
-      created_at: now,
-    },
-    {
-      id: "stf-cashier",
-      name: "حسین امینی (صندوقدار)",
-      username: "cashier",
-      pin: "3333",
-      phone: "09120000004",
-      role: "cashier",
-      permissions: { ...DEFAULT_ROLE_PERMISSIONS.cashier },
-      is_active: true,
-      created_at: now,
-    },
-    {
-      id: "stf-chef",
-      name: "امید نادری (سرآشپز)",
-      username: "chef",
-      pin: "4444",
-      phone: "09120000005",
-      role: "chef",
-      permissions: { ...DEFAULT_ROLE_PERMISSIONS.chef },
-      is_active: true,
-      created_at: now,
-    },
-  ];
+  const staff_users: StaffUser[] = [];
 
   const audit_entries: StaffAuditEntry[] = [
     {
@@ -630,16 +580,42 @@ function readBundle(): PersistedBundle {
       if (!Array.isArray(mergedStore.customer_sessions)) {
         mergedStore.customer_sessions = [];
       }
-      if (!Array.isArray(mergedStore.staff_users) || mergedStore.staff_users.length === 0) {
-        mergedStore.staff_users = initial.store.staff_users;
+      if (!Array.isArray(mergedStore.staff_users)) {
+        mergedStore.staff_users = [];
+      }
+      let needsCredentialMigration = false;
+      const defaultPins = new Map([
+        ["admin", "1234"],
+        ["waiter1", "1111"],
+        ["waiter2", "2222"],
+        ["cashier", "3333"],
+        ["chef", "4444"],
+      ]);
+      for (const staff of mergedStore.staff_users) {
+        if (defaultPins.get(staff.username) === staff.pin) {
+          if (staff.is_active) {
+            staff.is_active = false;
+            needsCredentialMigration = true;
+          }
+        }
+        if (typeof staff.pin !== "string" || !staff.pin) {
+          staff.pin = "";
+          staff.is_active = false;
+          needsCredentialMigration = true;
+        } else if (!isStaffPinHash(staff.pin)) {
+          staff.pin = hashStaffPin(staff.pin);
+          needsCredentialMigration = true;
+        }
       }
       if (!Array.isArray(mergedStore.audit_entries)) {
-        mergedStore.audit_entries = initial.store.audit_entries;
+        mergedStore.audit_entries = initial.store.audit_entries ?? [];
       }
-      return {
+      const result = {
         config: normalizeHallyConfig(parsed.config),
         store: mergedStore,
       };
+      if (needsCredentialMigration) writeBundle(result);
+      return result;
     }
   } catch (err) {
     console.error("Failed reading hally-os-store.json:", err);
@@ -737,11 +713,23 @@ function enqueueOrderPrintJobs(store: HallyStoreData, order: CafeOrder): void {
   }
 }
 
-export const getHallyFullBundle = createServerFn({ method: "GET" }).handler(
-  async (): Promise<PersistedBundle> => {
-    return readBundle();
-  },
-);
+export const getHallyFullBundle = createServerFn({ method: "GET" })
+  .middleware([requireHallyAuth])
+  .handler(async ({ context }): Promise<PersistedBundle> => {
+    if (context.hallyAuth.kind === "supabase") {
+      const { data: isAdmin, error } = await context.hallyAuth.supabase.rpc("has_role", {
+        _user_id: context.hallyAuth.userId,
+        _role: "admin",
+      });
+      if (error) throw new Error("Failed to verify administrator role");
+      if (!isAdmin) throw new Error("Forbidden: administrator access required");
+      return redactStaffCredentials(readBundle());
+    }
+
+    const bundle = readBundle();
+    const staff = requireCurrentStaff(bundle, context.hallyAuth);
+    return createStaffBundle(bundle, staff);
+  });
 
 export type PublicHallyContext = {
   config: HallySystemConfig;
@@ -757,16 +745,93 @@ export type PublicHallyContext = {
   }>;
 };
 
+function createPublicConfig(config: HallySystemConfig): HallySystemConfig {
+  return {
+    ...DEFAULT_HALLY_CONFIG,
+    features: {
+      ...DEFAULT_HALLY_CONFIG.features,
+      multilingual: config.features.multilingual,
+      online_menu: config.features.online_menu,
+      online_ordering: config.features.online_ordering,
+      public_reservation: config.features.public_reservation,
+      public_loyalty: config.features.public_loyalty,
+      tables: config.features.tables,
+      loyalty: config.features.loyalty,
+      vouchers: config.features.vouchers,
+      rewards: config.features.rewards,
+    },
+    default_language: config.default_language,
+    enabled_languages: config.enabled_languages,
+    currency_symbol: config.currency_symbol,
+    online_menu_show_ingredients: config.online_menu_show_ingredients,
+    online_menu_show_allergens: config.online_menu_show_allergens,
+    sms_provider: config.sms_provider,
+  };
+}
+
+function requireCurrentStaff(
+  bundle: PersistedBundle,
+  session: { staffId: string; credentialFingerprint: string },
+): StaffUser {
+  const staff = (bundle.store.staff_users ?? []).find((user) => user.id === session.staffId);
+  if (
+    !staff ||
+    !staff.is_active ||
+    getStaffCredentialFingerprint(staff) !== session.credentialFingerprint
+  ) {
+    throw new Error("Unauthorized: Staff account is inactive or its credentials changed");
+  }
+  return staff;
+}
+
+function createStaffBundle(bundle: PersistedBundle, staff: StaffUser): PersistedBundle {
+  const credentialSafeBundle = redactStaffCredentials(bundle);
+  if (staff.role === "admin") return credentialSafeBundle;
+
+  const permissions = {
+    ...DEFAULT_ROLE_PERMISSIONS[staff.role],
+    ...staff.permissions,
+  };
+  const safeStore: HallyStoreData = {
+    ...credentialSafeBundle.store,
+    staff_users: permissions.canManageSettings
+      ? credentialSafeBundle.store.staff_users ?? []
+      : [],
+    audit_entries: permissions.canViewAuditLogs ? bundle.store.audit_entries ?? [] : [],
+    payments: permissions.canSettleOrder ? bundle.store.payments : [],
+    inventory_movements: permissions.canManageInventory ? bundle.store.inventory_movements : [],
+    inventory_batches: permissions.canManageInventory ? bundle.store.inventory_batches : [],
+    pricing_rules: permissions.canManageMenu ? bundle.store.pricing_rules : [],
+    price_proposals: permissions.canManageMenu ? bundle.store.price_proposals : [],
+    orders: bundle.store.orders.map((order) => ({
+      ...order,
+      payment_reference: permissions.canSettleOrder ? order.payment_reference ?? null : null,
+      items: order.items.map((item) => ({
+        ...item,
+        unit_cost: permissions.canManageInventory ? item.unit_cost : 0,
+      })),
+    })),
+  };
+
+  return {
+    config: createPublicConfig(bundle.config),
+    store: safeStore,
+  };
+}
+
+function redactStaffCredentials(bundle: PersistedBundle): PersistedBundle {
+  const store = {
+    ...bundle.store,
+    staff_users: (bundle.store.staff_users ?? []).map((user) => ({ ...user, pin: "" })),
+  };
+  delete store.staff_login_attempts;
+  return { config: bundle.config, store };
+}
+
 export const getPublicHallyContext = createServerFn({ method: "GET" }).handler(
   async (): Promise<PublicHallyContext> => {
     const { config, store } = readBundle();
-    const safePublicConfig: HallySystemConfig = {
-      ...config,
-      mediana_api_key: "",
-      melipayamak_password: "",
-      zarinpal_merchant_id: "",
-      zibal_merchant_id: "",
-    };
+    const safePublicConfig = createPublicConfig(config);
     const tablesEnabled = config.features.tables !== false;
     const loyaltyEnabled =
       config.features.loyalty !== false && config.features.public_loyalty !== false;
@@ -1326,24 +1391,82 @@ async function dispatchReservationSmsViaGateway(params: {
   return { delivered_live: false, provider, message_text: messageText };
 }
 
+function createStaffLoginResult(staff: StaffUser): StaffLoginResult {
+  const { pin: _pin, ...publicStaff } = staff;
+  return {
+    staff: publicStaff,
+    session_token: createStaffSessionToken(staff),
+  };
+}
+
+function sandboxCodeForResponse(code: string, deliveredLive: boolean): string | undefined {
+  return process.env["NODE_ENV"] === "development" && !deliveredLive ? code : undefined;
+}
+
+function assertOtpSendAllowed(
+  challenges: CustomerOtpChallenge[],
+  mobile: string,
+  nowMs: number,
+): void {
+  const recentlySent = challenges.some(
+    (challenge) =>
+      challenge.mobile === mobile && nowMs - new Date(challenge.created_at).getTime() < 60_000,
+  );
+  if (recentlySent) throw new Error("برای ارسال کد جدید، یک دقیقه صبر کنید");
+}
+
 export const verifyStaffCredentials = createServerFn({ method: "POST" })
   .inputValidator((input: { username: string; pin: string }) => input)
-  .handler(async ({ data }): Promise<StaffUser> => {
+  .handler(async ({ data }): Promise<StaffLoginResult> => {
     const username = toEnglishDigits(data.username ?? "")
       .trim()
       .toLowerCase();
     const pin = toEnglishDigits(data.pin ?? "").trim();
-    if (!username || !pin) {
+    if (!username || !pin || username.length > 64 || pin.length > 64) {
       throw new Error("نام کاربری و رمز / پین ورود الزامی است");
     }
     const bundle = readBundle();
     const { store } = bundle;
-    const found = (store.staff_users ?? []).find(
-      (u) => u.is_active && u.username.toLowerCase() === username && u.pin === pin,
+    const nowMs = Date.now();
+    const attempts = store.staff_login_attempts ?? {};
+    let attemptsChanged = false;
+    for (const [attemptedStaffId, attempt] of Object.entries(attempts)) {
+      if (nowMs - new Date(attempt.window_started_at).getTime() >= STAFF_LOGIN_WINDOW_MS) {
+        delete attempts[attemptedStaffId];
+        attemptsChanged = true;
+      }
+    }
+    store.staff_login_attempts = attempts;
+    const staff = (store.staff_users ?? []).find(
+      (candidate) => candidate.username.toLowerCase() === username,
     );
-    if (!found) {
+    const attempt = staff?.is_active ? attempts[staff.id] : undefined;
+    if (attempt && attempt.count >= STAFF_LOGIN_MAX_ATTEMPTS) {
+      performDummyStaffPinVerification(pin);
+      if (attemptsChanged) writeBundle(bundle);
       throw new Error("نام کاربری یا کد پین اشتباه است یا حساب غیرفعال شده است");
     }
+
+    let pinMatches = false;
+    if (staff?.is_active) {
+      pinMatches = verifyStaffPin(pin, staff.pin);
+    } else {
+      performDummyStaffPinVerification(pin);
+    }
+    const found = staff?.is_active && pinMatches ? staff : undefined;
+    if (!found) {
+      if (staff?.is_active) {
+        attempts[staff.id] = {
+          count: (attempt?.count ?? 0) + 1,
+          window_started_at: attempt?.window_started_at ?? new Date(nowMs).toISOString(),
+        };
+        writeBundle(bundle);
+      } else if (attemptsChanged) {
+        writeBundle(bundle);
+      }
+      throw new Error("نام کاربری یا کد پین اشتباه است یا حساب غیرفعال شده است");
+    }
+    delete attempts[found.id];
     store.audit_entries = store.audit_entries ?? [];
     store.audit_entries.unshift({
       id: `aud-${Date.now()}`,
@@ -1358,7 +1481,7 @@ export const verifyStaffCredentials = createServerFn({ method: "POST" })
       created_at: new Date().toISOString(),
     });
     writeBundle(bundle);
-    return found;
+    return createStaffLoginResult(found);
   });
 
 export const requestStaffOtp = createServerFn({ method: "POST" })
@@ -1390,14 +1513,14 @@ export const requestStaffOtp = createServerFn({ method: "POST" })
           "شماره موبایل وارد شده در لیست پرسنل فعال کافه هالی ثبت نشده است. لطفاً با مدیر سیستم تماس بگیرید.",
         );
       }
+      const nowMs = Date.now();
+      assertOtpSendAllowed(store.otp_challenges ?? [], mobile, nowMs);
 
       const provider: SmsProviderType =
         data.provider === "melipayamak" || data.provider === "mediana"
           ? data.provider
           : config.sms_provider || "mediana";
-
-      const code = String(Math.floor(10000 + Math.random() * 90000));
-      const nowMs = Date.now();
+      const code = String(randomInt(10000, 100000));
       const expiresAt = new Date(nowMs + 3 * 60 * 1000).toISOString();
 
       store.otp_challenges = (store.otp_challenges ?? []).filter(
@@ -1422,6 +1545,7 @@ export const requestStaffOtp = createServerFn({ method: "POST" })
         mobile,
         code,
       });
+      const sandboxCode = sandboxCodeForResponse(code, dispatchResult.delivered_live);
 
       return {
         mobile,
@@ -1430,14 +1554,14 @@ export const requestStaffOtp = createServerFn({ method: "POST" })
         expires_in_sec: 180,
         delivered_live: dispatchResult.delivered_live,
         gateway_message: dispatchResult.gateway_message,
-        sandbox_code: dispatchResult.delivered_live ? undefined : code,
+        ...(sandboxCode ? { sandbox_code: sandboxCode } : {}),
       };
     },
   );
 
 export const verifyStaffOtp = createServerFn({ method: "POST" })
   .inputValidator((input: { mobile: string; code: string }) => input)
-  .handler(async ({ data }): Promise<StaffUser> => {
+  .handler(async ({ data }): Promise<StaffLoginResult> => {
     const mobile = normalizeIranMobile(data.mobile);
     const code = toEnglishDigits(data.code ?? "").trim();
     if (!mobile || !code) {
@@ -1452,12 +1576,19 @@ export const verifyStaffOtp = createServerFn({ method: "POST" })
     const matched = challenges.find(
       (c) =>
         c.mobile === mobile &&
-        c.code === code &&
         !c.verified &&
         new Date(c.expires_at).getTime() >= nowMs,
     );
 
     if (!matched) {
+      throw new Error("کد یکبارمصرف پرسنل نامعتبر یا منقضی شده است");
+    }
+    if ((matched.attempts ?? 0) >= 5) {
+      throw new Error("تعداد تلاش‌های مجاز برای این کد به پایان رسیده است");
+    }
+    matched.attempts = (matched.attempts ?? 0) + 1;
+    if (matched.code !== code) {
+      writeBundle(bundle);
       throw new Error("کد یکبارمصرف پرسنل نامعتبر یا منقضی شده است");
     }
 
@@ -1485,7 +1616,7 @@ export const verifyStaffOtp = createServerFn({ method: "POST" })
     });
 
     writeBundle(bundle);
-    return staff;
+    return createStaffLoginResult(staff);
   });
 
 export type CustomerPortalData = {
@@ -1568,13 +1699,13 @@ export const requestCustomerOtp = createServerFn({ method: "POST" })
       }
       const bundle = readBundle();
       const { config, store } = bundle;
+      const nowMs = Date.now();
+      assertOtpSendAllowed(store.otp_challenges ?? [], mobile, nowMs);
       const provider: SmsProviderType =
         data.provider === "melipayamak" || data.provider === "mediana"
           ? data.provider
           : config.sms_provider || "mediana";
-
-      const code = String(Math.floor(10000 + Math.random() * 90000));
-      const nowMs = Date.now();
+      const code = String(randomInt(10000, 100000));
       const expiresAt = new Date(nowMs + 3 * 60 * 1000).toISOString();
 
       store.otp_challenges = (store.otp_challenges ?? []).filter(
@@ -1601,6 +1732,7 @@ export const requestCustomerOtp = createServerFn({ method: "POST" })
       });
 
       const existing = store.customers.find((c) => normalizeIranMobile(c.mobile) === mobile);
+      const sandboxCode = sandboxCodeForResponse(code, dispatchResult.delivered_live);
 
       return {
         mobile,
@@ -1608,9 +1740,9 @@ export const requestCustomerOtp = createServerFn({ method: "POST" })
         expires_in_sec: 180,
         delivered_live: dispatchResult.delivered_live,
         gateway_message: dispatchResult.gateway_message,
-        sandbox_code: dispatchResult.delivered_live ? undefined : code,
+        ...(sandboxCode ? { sandbox_code: sandboxCode } : {}),
         is_existing_customer: Boolean(existing),
-        existing_customer_name: existing?.name,
+        ...(existing ? { existing_customer_name: existing.name } : {}),
       };
     },
   );
@@ -1632,12 +1764,19 @@ export const verifyCustomerOtp = createServerFn({ method: "POST" })
     const matched = challenges.find(
       (c) =>
         c.mobile === mobile &&
-        c.code === code &&
         !c.verified &&
         new Date(c.expires_at).getTime() >= nowMs,
     );
 
     if (!matched) {
+      throw new Error("کد یکبارمصرف نامعتبر یا منقضی شده است");
+    }
+    if ((matched.attempts ?? 0) >= 5) {
+      throw new Error("تعداد تلاش‌های مجاز برای این کد به پایان رسیده است");
+    }
+    matched.attempts = (matched.attempts ?? 0) + 1;
+    if (matched.code !== code) {
+      writeBundle(bundle);
       throw new Error("کد یکبارمصرف نامعتبر یا منقضی شده است");
     }
 
@@ -1978,6 +2117,110 @@ export type AdminMutationAction = AdminMutationCoreAction & {
   actor?: MutationActorInfo;
 };
 
+const STAFF_MUTATION_PERMISSIONS = {
+  save_config: "canManageSettings",
+  upsert_table: "canManageSettings",
+  toggle_table_status: "canManageSettings",
+  delete_table: "canManageSettings",
+  create_pos_order: "canCreateOrder",
+  update_pos_order: "canEditOrder",
+  delete_pos_order: "canDeleteOrder",
+  update_order_status: "canEditOrder",
+  upsert_reservation: "canManageReservations",
+  update_reservation_status: "canManageReservations",
+  send_reservation_sms: "canManageReservations",
+  delete_reservation: "canManageReservations",
+  upsert_customer: "canCreateOrder",
+  adjust_customer_points: "canSettleOrder",
+  save_loyalty_tiers: "canManageSettings",
+  upsert_voucher: "canManageSettings",
+  toggle_voucher_status: "canManageSettings",
+  delete_voucher: "canManageSettings",
+  upsert_reward: "canManageSettings",
+  redeem_reward: "canCreateOrder",
+  delete_reward: "canManageSettings",
+  upsert_printer: "canManageMenu",
+  delete_printer: "canManageMenu",
+  claim_print_jobs: "canManageMenu",
+  update_print_job_status: "canManageMenu",
+  reprint_order: "canManageMenu",
+  update_payment_status: "canSettleOrder",
+  record_inventory_movement: "canManageInventory",
+  update_inventory_movement: "canManageInventory",
+  delete_inventory_movement: "canManageInventory",
+  upsert_inventory_batch: "canManageInventory",
+  delete_inventory_batch: "canManageInventory",
+  upsert_pricing_rule: "canManageMenu",
+  delete_pricing_rule: "canManageMenu",
+  create_price_proposal: "canManageMenu",
+  decide_price_proposal: "canManageSettings",
+  upsert_calendar_event: "canManageSettings",
+  delete_calendar_event: "canManageSettings",
+  upsert_staff_user: "canManageSettings",
+  toggle_staff_user: "canManageSettings",
+  delete_staff_user: "canManageSettings",
+  record_audit_entry: "canViewAuditLogs",
+} satisfies Record<AdminMutationCoreAction["type"], keyof StaffPermissions>;
+
+function requireStaffMutationPermission(
+  staff: StaffUser,
+  action: AdminMutationCoreAction,
+): void {
+  const permissions = {
+    ...DEFAULT_ROLE_PERMISSIONS[staff.role],
+    ...staff.permissions,
+  };
+
+  if (action.type === "create_pos_order") {
+    if (!permissions.canCreateOrder || (action.order.immediate_pay && !permissions.canSettleOrder)) {
+      throw new Error("Forbidden: insufficient staff permissions");
+    }
+    return;
+  }
+
+  if (action.type === "update_order_status") {
+    const canUpdateStatus =
+      action.status === "paid"
+        ? permissions.canSettleOrder
+        : permissions.canEditOrder || permissions.canManageMenu;
+    if (!canUpdateStatus) throw new Error("Forbidden: insufficient staff permissions");
+    return;
+  }
+
+  if (!permissions[STAFF_MUTATION_PERMISSIONS[action.type]]) {
+    throw new Error("Forbidden: insufficient staff permissions");
+  }
+}
+
+function toJsonValue(value: unknown): JsonValue | undefined {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (Array.isArray(value)) {
+    return value.map((item) => toJsonValue(item) ?? null);
+  }
+  if (typeof value === "object") {
+    const result: Record<string, JsonValue> = {};
+    for (const [key, item] of Object.entries(value)) {
+      const jsonValue = toJsonValue(item);
+      if (jsonValue !== undefined) result[key] = jsonValue;
+    }
+    return result;
+  }
+  return undefined;
+}
+
+function sanitizeAuditDetails(
+  details: Record<string, unknown> | null,
+): Record<string, JsonValue> | null {
+  if (!details) return null;
+  const result: Record<string, JsonValue> = {};
+  for (const [key, value] of Object.entries(details)) {
+    const jsonValue = toJsonValue(value);
+    if (jsonValue !== undefined) result[key] = jsonValue;
+  }
+  return result;
+}
+
 function pushAudit(
   store: HallyStoreData,
   actor: MutationActorInfo | undefined,
@@ -1997,7 +2240,7 @@ function pushAudit(
     entity,
     entity_id: entityId,
     summary,
-    details,
+    details: sanitizeAuditDetails(details),
     created_at: new Date().toISOString(),
   });
   if (store.audit_entries.length > 500) {
@@ -2006,12 +2249,41 @@ function pushAudit(
 }
 
 export const mutateHallyStore = createServerFn({ method: "POST" })
+  .middleware([requireHallyAuth])
   .inputValidator((input: AdminMutationAction) => input)
-  .handler(async ({ data: action }): Promise<PersistedBundle> => {
-    const bundle = readBundle();
+  .handler(async ({ data: action, context }): Promise<PersistedBundle> => {
+    let bundle: PersistedBundle;
+    let actor: MutationActorInfo;
+    let staffActor: StaffUser | null = null;
+    if (context.hallyAuth.kind === "supabase") {
+      const { data: isAdmin, error } = await context.hallyAuth.supabase.rpc("has_role", {
+        _user_id: context.hallyAuth.userId,
+        _role: "admin",
+      });
+      if (error) throw new Error("Failed to verify administrator role");
+      if (!isAdmin) throw new Error("Forbidden: administrator access required");
+
+      bundle = readBundle();
+      const email = context.hallyAuth.claims.email;
+      actor = {
+        id: context.hallyAuth.userId,
+        name: typeof email === "string" ? email : context.hallyAuth.userId,
+        role: STAFF_ROLE_LABELS.admin,
+      };
+    } else {
+      bundle = readBundle();
+      const staff = requireCurrentStaff(bundle, context.hallyAuth);
+      requireStaffMutationPermission(staff, action);
+      staffActor = staff;
+      actor = {
+        id: staff.id,
+        name: staff.name,
+        role: STAFF_ROLE_LABELS[staff.role] ?? staff.role,
+      };
+    }
+
     const { store } = bundle;
     const now = new Date().toISOString();
-    const actor = action.actor;
 
     switch (action.type) {
       case "save_config": {
@@ -2458,7 +2730,7 @@ export const mutateHallyStore = createServerFn({ method: "POST" })
 
           order.status = action.status;
           order.updated_at = now;
-          order.updated_by_name = actor?.name || order.updated_by_name;
+          order.updated_by_name = actor?.name || order.updated_by_name || null;
           if (action.payment_method) {
             order.payment_method = action.payment_method;
           }
@@ -3342,7 +3614,7 @@ export const mutateHallyStore = createServerFn({ method: "POST" })
           if (existing) {
             existing.name = u.name.trim();
             existing.username = toEnglishDigits(u.username).trim().toLowerCase();
-            if (u.pin?.trim()) existing.pin = toEnglishDigits(u.pin).trim();
+            if (u.pin?.trim()) existing.pin = hashStaffPin(toEnglishDigits(u.pin).trim());
             if (u.phone !== undefined) existing.phone = toEnglishDigits(u.phone).trim();
             existing.role = u.role;
             existing.permissions = u.permissions
@@ -3359,11 +3631,13 @@ export const mutateHallyStore = createServerFn({ method: "POST" })
             );
           }
         } else {
+          const pin = toEnglishDigits(u.pin ?? "").trim();
+          if (!pin) throw new Error("برای ساخت حساب پرسنل، تعیین پین الزامی است");
           const newStaff: StaffUser = {
             id: `stf-${Date.now()}`,
             name: u.name.trim(),
             username: toEnglishDigits(u.username).trim().toLowerCase(),
-            pin: toEnglishDigits(u.pin || "1234").trim(),
+            pin: hashStaffPin(pin),
             phone: toEnglishDigits(u.phone || "").trim(),
             role: u.role,
             permissions: u.permissions
@@ -3432,5 +3706,5 @@ export const mutateHallyStore = createServerFn({ method: "POST" })
     }
 
     writeBundle(bundle);
-    return bundle;
+    return staffActor ? createStaffBundle(bundle, staffActor) : redactStaffCredentials(bundle);
   });

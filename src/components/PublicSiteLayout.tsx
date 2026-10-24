@@ -207,7 +207,9 @@ export function PublicSiteLayout({ children }: { children: ReactNode }) {
         open={accountOpen}
         onOpenChange={setAccountOpen}
         defaultProvider={publicHally?.config.sms_provider ?? "mediana"}
-        currencySymbol={publicHally?.config.currency_symbol}
+        {...(publicHally?.config.currency_symbol
+          ? { currencySymbol: publicHally.config.currency_symbol }
+          : {})}
       />
 
       {children}

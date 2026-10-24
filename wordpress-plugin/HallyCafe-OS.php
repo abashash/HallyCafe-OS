@@ -14,6 +14,10 @@
 
 defined('ABSPATH') || exit;
 
+if (class_exists('Hally_Native_Cafe_Plugin', false)) {
+    return;
+}
+
 define('HALLY_CAFE_VERSION', '2.0.0');
 define('HALLY_CAFE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('HALLY_CAFE_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -122,7 +126,7 @@ class Hally_Native_Cafe_Plugin {
             notes text,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id)
-        ) $charset_collate;";
+        ) $charset_collate ENGINE=InnoDB;";
         dbDelta($sql_orders);
 
         // جدول آیتم‌های فاکتور سفارش
@@ -135,7 +139,7 @@ class Hally_Native_Cafe_Plugin {
             unit_price decimal(12,0) NOT NULL DEFAULT 0,
             total_price decimal(12,0) NOT NULL DEFAULT 0,
             PRIMARY KEY (id)
-        ) $charset_collate;";
+        ) $charset_collate ENGINE=InnoDB;";
         dbDelta($sql_items);
 
         // جدول هزینه‌های جاری
@@ -295,14 +299,14 @@ class Hally_Native_Cafe_Plugin {
         register_rest_route('hally/v1', '/orders', array(
             'methods' => 'GET',
             'callback' => array($this, 'api_get_orders'),
-            'permission_callback' => '__return_true'
+            'permission_callback' => array($this, 'can_manage_orders')
         ));
 
         // آپدیت وضعیت سفارش (آماده، تحویل شده و...)
         register_rest_route('hally/v1', '/orders/update-status', array(
             'methods' => 'POST',
             'callback' => array($this, 'api_update_order_status'),
-            'permission_callback' => '__return_true'
+            'permission_callback' => array($this, 'can_manage_orders')
         ));
 
         // ثبت رزرو میز
@@ -337,22 +341,77 @@ class Hally_Native_Cafe_Plugin {
         return rest_ensure_response(array('success' => true, 'data' => $tables));
     }
 
+    public function can_manage_orders() {
+        return current_user_can('manage_options');
+    }
+
     public function api_create_order($request) {
         global $wpdb;
         $params = $request->get_json_params();
+        if (!is_array($params)) {
+            return new WP_Error('invalid_order', 'درخواست سفارش معتبر نیست', array('status' => 400));
+        }
+        $items = $params['items'] ?? null;
+        if (!is_array($items) || count($items) === 0 || count($items) > 50) {
+            return new WP_Error('invalid_order', 'اقلام سفارش معتبر نیستند', array('status' => 400));
+        }
 
         $table_num = sanitize_text_field($params['table_number'] ?? 'T-01');
         $phone = sanitize_text_field($params['customer_phone'] ?? '');
         $notes = sanitize_textarea_field($params['notes'] ?? '');
-        $payment_method = sanitize_text_field($params['payment_method'] ?? 'online');
-        $payment_status = sanitize_text_field($params['payment_status'] ?? 'pending');
-        $order_status = sanitize_text_field($params['order_status'] ?? 'preparing');
-        $total = floatval($params['total_amount'] ?? 0);
+        $is_admin_order = current_user_can('manage_options');
+        $payment_method = $is_admin_order
+            ? sanitize_text_field($params['payment_method'] ?? 'pos')
+            : 'online';
+        $payment_status = $is_admin_order && ($params['payment_status'] ?? '') === 'paid'
+            ? 'paid'
+            : 'pending';
+        $allowed_order_statuses = array('preparing', 'ready', 'delivered', 'cancelled');
+        $requested_status = sanitize_text_field($params['order_status'] ?? 'preparing');
+        $order_status = $is_admin_order && in_array($requested_status, $allowed_order_statuses, true)
+            ? $requested_status
+            : 'preparing';
 
         $table_orders = $wpdb->prefix . 'hally_orders';
         $table_items = $wpdb->prefix . 'hally_order_items';
+        $table_menu = $wpdb->prefix . 'hally_menu_items';
+        $order_items = array();
+        $total = 0;
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                return new WP_Error('invalid_order_item', 'یکی از اقلام سفارش معتبر نیست', array('status' => 400));
+            }
+            $item_id = filter_var($item['id'] ?? null, FILTER_VALIDATE_INT);
+            $quantity = filter_var($item['qty'] ?? null, FILTER_VALIDATE_INT);
+            if ($item_id === false || $item_id < 1 || $quantity === false || $quantity < 1 || $quantity > 99) {
+                return new WP_Error('invalid_order_item', 'شناسه یا تعداد یکی از اقلام معتبر نیست', array('status' => 400));
+            }
+
+            $menu_item = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, name, price FROM $table_menu WHERE id = %d AND is_available = 1",
+                $item_id
+            ));
+            if (!$menu_item) {
+                return new WP_Error('unavailable_item', 'یکی از اقلام سفارش در دسترس نیست', array('status' => 400));
+            }
+
+            $unit_price = (float) $menu_item->price;
+            $line_total = $unit_price * $quantity;
+            $total += $line_total;
+            $order_items[] = array(
+                'name' => sanitize_text_field($menu_item->name),
+                'quantity' => $quantity,
+                'unit_price' => $unit_price,
+                'total_price' => $line_total
+            );
+        }
 
         $order_num = 'ORD-' . date('ymd') . '-' . rand(100, 999);
+
+        if ($wpdb->query('START TRANSACTION') === false) {
+            return new WP_Error('db_error', 'خطا در شروع ثبت سفارش', array('status' => 500));
+        }
 
         $inserted = $wpdb->insert($table_orders, array(
             'order_number' => $order_num,
@@ -368,21 +427,29 @@ class Hally_Native_Cafe_Plugin {
         ));
 
         if (!$inserted) {
+            $wpdb->query('ROLLBACK');
             return new WP_Error('db_error', 'خطا در ثبت فاکتور سفارش', array('status' => 500));
         }
 
         $order_id = $wpdb->insert_id;
 
-        if (!empty($params['items']) && is_array($params['items'])) {
-            foreach ($params['items'] as $item) {
-                $wpdb->insert($table_items, array(
-                    'order_id' => $order_id,
-                    'name' => sanitize_text_field($item['name']),
-                    'quantity' => intval($item['qty']),
-                    'unit_price' => floatval($item['price']),
-                    'total_price' => floatval($item['price']) * intval($item['qty'])
-                ));
+        foreach ($order_items as $item) {
+            $item_inserted = $wpdb->insert($table_items, array(
+                'order_id' => $order_id,
+                'name' => $item['name'],
+                'quantity' => $item['quantity'],
+                'unit_price' => $item['unit_price'],
+                'total_price' => $item['total_price']
+            ));
+            if (!$item_inserted) {
+                $wpdb->query('ROLLBACK');
+                return new WP_Error('db_error', 'خطا در ثبت اقلام سفارش', array('status' => 500));
             }
+        }
+
+        if ($wpdb->query('COMMIT') === false) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('db_error', 'خطا در نهایی‌سازی سفارش', array('status' => 500));
         }
 
         return rest_ensure_response(array(

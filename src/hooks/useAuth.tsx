@@ -6,18 +6,34 @@ import {
   STAFF_ROLE_LABELS,
   type StaffPermissions,
   type StaffRole,
-  type StaffUser,
+  type StaffSessionUser,
 } from "@/lib/hally-types";
+import { HALLY_STAFF_SESSION_TOKEN_KEY } from "@/integrations/supabase/staff-session-shared";
 
-export const HALLY_STAFF_SESSION_KEY = "hally_staff_session_v1";
+export const HALLY_STAFF_SESSION_KEY = "hally_staff_session_v2";
 
-export function getSavedStaffSession(): StaffUser | null {
+export function getSavedStaffSessionToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(HALLY_STAFF_SESSION_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function getSavedStaffSession(): StaffSessionUser | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(HALLY_STAFF_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StaffUser;
-    if (parsed && parsed.id && parsed.username && parsed.role) {
+    if (!raw || !getSavedStaffSessionToken()) return null;
+    const parsed = JSON.parse(raw) as StaffSessionUser;
+    if (
+      parsed &&
+      parsed.id &&
+      parsed.username &&
+      parsed.name &&
+      Object.prototype.hasOwnProperty.call(DEFAULT_ROLE_PERMISSIONS, parsed.role)
+    ) {
       return {
         ...parsed,
         permissions: {
@@ -32,13 +48,16 @@ export function getSavedStaffSession(): StaffUser | null {
   }
 }
 
-export function saveStaffSession(user: StaffUser | null): void {
+export function saveStaffSession(user: StaffSessionUser | null, token?: string): void {
   if (typeof window === "undefined") return;
   try {
     if (!user) {
       window.localStorage.removeItem(HALLY_STAFF_SESSION_KEY);
+      window.localStorage.removeItem(HALLY_STAFF_SESSION_TOKEN_KEY);
     } else {
+      if (!token) throw new Error("Staff session token is required");
       window.localStorage.setItem(HALLY_STAFF_SESSION_KEY, JSON.stringify(user));
+      window.localStorage.setItem(HALLY_STAFF_SESSION_TOKEN_KEY, token);
     }
   } catch {
     // ignore storage errors
@@ -48,7 +67,7 @@ export function saveStaffSession(user: StaffUser | null): void {
 type AuthState = {
   user: User | null;
   session: Session | null;
-  staffUser: StaffUser | null;
+  staffUser: StaffSessionUser | null;
   activeRole: StaffRole;
   activeRoleLabel: string;
   activeUserName: string;
@@ -60,7 +79,7 @@ type AuthState = {
   /** آیا کاربر (مدیر یا پرسنل) وارد سیستم شده است */
   isAuthenticated: boolean;
   loading: boolean;
-  loginAsStaff: (staff: StaffUser) => void;
+  loginAsStaff: (staff: StaffSessionUser, token: string) => void;
   signOut: () => Promise<void>;
 };
 
@@ -83,7 +102,9 @@ const AuthContext = createContext<AuthState>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [staffUser, setStaffUser] = useState<StaffUser | null>(() => getSavedStaffSession());
+  const [staffUser, setStaffUser] = useState<StaffSessionUser | null>(() => getSavedStaffSession());
+  const [isSupabaseAdmin, setIsSupabaseAdmin] = useState(false);
+  const [roleLoading, setRoleLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -99,7 +120,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const isSupabaseAdmin = Boolean(session?.user);
+  useEffect(() => {
+    let active = true;
+    const userId = session?.user.id;
+    if (!userId) {
+      setIsSupabaseAdmin(false);
+      setRoleLoading(false);
+      return;
+    }
+
+    setIsSupabaseAdmin(false);
+    setRoleLoading(true);
+    supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.error("Failed to load Supabase user role:", error);
+          setIsSupabaseAdmin(false);
+        } else {
+          setIsSupabaseAdmin(Boolean(data));
+        }
+        setRoleLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [session?.user.id]);
+
   const activeRole: StaffRole = staffUser ? staffUser.role : isSupabaseAdmin ? "admin" : "guest";
 
   const permissions: StaffPermissions = staffUser
@@ -133,9 +187,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasPermission: (key: keyof StaffPermissions) => Boolean(permissions[key]),
     isAdmin,
     isAuthenticated,
-    loading,
-    loginAsStaff: (staff: StaffUser) => {
-      saveStaffSession(staff);
+    loading: loading || roleLoading,
+    loginAsStaff: (staff: StaffSessionUser, token: string) => {
+      saveStaffSession(staff, token);
       setStaffUser(staff);
     },
     signOut: async () => {

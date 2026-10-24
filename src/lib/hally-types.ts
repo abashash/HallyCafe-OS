@@ -173,12 +173,14 @@ export type PrintJob = {
   delivered_at: string | null;
 };
 
+export type PaymentProvider = "cash" | "card" | "zarinpal" | "zibal";
+
 export type PaymentTransaction = {
   id: string;
   order_id: string;
   order_number: number;
   customer_name: string;
-  provider: "cash" | "card" | "zarinpal" | "zibal";
+  provider: PaymentProvider;
   amount: number;
   status: "success" | "pending" | "failed" | "refunded";
   reference_id: string;
@@ -256,6 +258,7 @@ export type CustomerOtpChallenge = {
   id: string;
   mobile: string;
   code: string;
+  attempts?: number;
   provider: "mediana" | "melipayamak";
   expires_at: string;
   verified: boolean;
@@ -399,6 +402,21 @@ export type StaffUser = {
   created_at: string;
 };
 
+export type StaffSessionUser = Omit<StaffUser, "pin">;
+
+export type StaffLoginResult = {
+  staff: StaffSessionUser;
+  session_token: string;
+};
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 export type StaffAuditEntry = {
   id: string;
   user_id: string | null;
@@ -408,7 +426,7 @@ export type StaffAuditEntry = {
   entity: string;
   entity_id: string | null;
   summary: string;
-  details: Record<string, unknown> | null;
+  details: Record<string, JsonValue> | null;
   created_at: string;
 };
 
@@ -434,5 +452,6 @@ export type HallyStoreData = {
   otp_challenges?: CustomerOtpChallenge[];
   customer_sessions?: CustomerSession[];
   staff_users?: StaffUser[];
+  staff_login_attempts?: Record<string, { count: number; window_started_at: string }>;
   audit_entries?: StaffAuditEntry[];
 };

@@ -44,10 +44,10 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const navigate = useNavigate();
   const { dir, t } = useI18n();
-  const { loginAsStaff } = useAuth();
+  const { loginAsStaff, isAdmin } = useAuth();
 
   // Mobile + OTP state
-  const [mobile, setMobile] = useState("09120000001");
+  const [mobile, setMobile] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [sandboxCode, setSandboxCode] = useState<string | null>(null);
@@ -55,8 +55,8 @@ function AuthPage() {
   const [countdown, setCountdown] = useState(0);
 
   // Username + PIN state (fallback)
-  const [username, setUsername] = useState("waiter1");
-  const [pin, setPin] = useState("1111");
+  const [username, setUsername] = useState("");
+  const [pin, setPin] = useState("");
 
   // Admin Supabase email state
   const [email, setEmail] = useState("");
@@ -69,10 +69,8 @@ function AuthPage() {
       navigate({ to: existingStaff.role === "waiter" ? "/pos" : "/dashboard" });
       return;
     }
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard" });
-    });
-  }, [navigate]);
+    if (isAdmin) navigate({ to: "/dashboard" });
+  }, [isAdmin, navigate]);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -127,8 +125,9 @@ function AuthPage() {
     }
     setBusy(true);
     try {
-      const staff = await verifyStaffOtp({ data: { mobile: m, code: c } });
-      loginAsStaff(staff);
+      const login = await verifyStaffOtp({ data: { mobile: m, code: c } });
+      const { staff, session_token } = login;
+      loginAsStaff(staff, session_token);
       toast.success(
         t(
           `${staff.name} (${STAFF_ROLE_LABELS[staff.role]}) خوش آمدید!`,
@@ -162,8 +161,9 @@ function AuthPage() {
     }
     setBusy(true);
     try {
-      const staff = await verifyStaffCredentials({ data: { username: u, pin: p } });
-      loginAsStaff(staff);
+      const login = await verifyStaffCredentials({ data: { username: u, pin: p } });
+      const { staff, session_token } = login;
+      loginAsStaff(staff, session_token);
       toast.success(
         t(
           `${staff.name} (${STAFF_ROLE_LABELS[staff.role]}) خوش آمدید!`,

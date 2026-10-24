@@ -198,7 +198,7 @@ export function CustomerAccountDialog({
         data: {
           mobile,
           code: cleanCode,
-          name: customerName.trim() || undefined,
+          ...(customerName.trim() ? { name: customerName.trim() } : {}),
         },
       });
       try {

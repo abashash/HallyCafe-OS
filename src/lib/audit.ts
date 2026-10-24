@@ -18,8 +18,8 @@ export async function logAudit(
 
   try {
     const summaryText =
-      typeof details?.name === "string"
-        ? `${action} روی ${entity} («${details.name}»)`
+      typeof details?.["name"] === "string"
+        ? `${action} روی ${entity} («${details["name"]}»)`
         : `${action} روی ${entity}`;
     await mutateHallyStore({
       data: {

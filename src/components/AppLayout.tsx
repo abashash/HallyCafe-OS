@@ -34,16 +34,13 @@ import {
   UserCheck,
   type LucideIcon,
 } from "lucide-react";
-import { toast } from "sonner";
-
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import type { FeatureKey } from "@/lib/feature-flags";
-import { useFeatureFlags, useHallyBundle } from "@/lib/hally-os";
-import { STAFF_ROLE_LABELS } from "@/lib/hally-types";
+import { useFeatureFlags } from "@/lib/hally-os";
 import { type TrilingualText, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -347,13 +344,10 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function AppLayout({ children }: { children: ReactNode }) {
-  const { activeUserName, activeRoleLabel, staffUser, loginAsStaff, signOut } = useAuth();
-  const { data: bundle } = useHallyBundle();
+  const { activeUserName, activeRoleLabel, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const { dir, t } = useI18n();
-
-  const staffUsers = (bundle?.store.staff_users ?? []).filter((u) => u.is_active);
 
   async function handleSignOut() {
     await signOut();
@@ -395,37 +389,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
             {activeRoleLabel}
           </Badge>
         </div>
-        {staffUsers.length > 0 && (
-          <div className="mt-2">
-            <select
-              aria-label={t("تعویض سریع کاربر پرسنل", "Quick Switch Staff User", "تبديل المستخدم")}
-              value={staffUser?.id ?? ""}
-              onChange={(e) => {
-                const chosen = staffUsers.find((u) => u.id === e.target.value);
-                if (chosen) {
-                  loginAsStaff(chosen);
-                  toast.success(
-                    t(
-                      `کاربر فعال به «${chosen.name}» (${STAFF_ROLE_LABELS[chosen.role]}) تغییر یافت`,
-                      `Switched active user to ${chosen.name}`,
-                      `تم تبديل المستخدم إلى ${chosen.name}`,
-                    ),
-                  );
-                }
-              }}
-              className="h-7 w-full rounded border border-sidebar-border bg-sidebar px-2 text-[11px] text-sidebar-foreground"
-            >
-              <option value="" disabled>
-                {t("تعویض کاربر / شیفت (تبلت)...", "Switch Staff / Shift...", "تبديل الموظف...")}
-              </option>
-              {staffUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} — {STAFF_ROLE_LABELS[u.role]}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       <Button variant="secondary" size="sm" className="w-full" onClick={handleSignOut}>
